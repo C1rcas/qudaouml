@@ -1,0 +1,114 @@
+@startuml
+start
+:QianchengPDPushOrderJob工作;
+note right
+  //cl_borrow 表 // <b>借款信息表</b>
+  ====
+  查询条件
+  //process_status = 2//<b>待解析状态</b>
+  //source = 2 // <b>渠道来源浅橙</b>
+  //gmt_modified < DATE_SUB(NOW(),INTERVAL 1 MINUTE) // <b>一分钟之前的数据的数据</b>
+end note
+
+:查询待解析的订单数据;
+if (待解析订单数据是否存在？) then (no)
+    stop
+    note left
+    订单不存在，不解析
+    end note
+else (yes)
+endif
+
+partition 能否解析订单 {
+    if (三方订单表数据是否存在？) then (no)
+        stop
+        note left
+        订单不存在，不解析
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表数据处理状态为待解析？) then (no)
+        stop
+        note left
+        三方:{}，订单:{}状态异常，不解析
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表认证信息是否存在？) then (no)
+        stop
+        note left
+        三方:{}，订单:{}未认证完成，不解析
+        end note
+    else (yes)
+    endif
+}
+
+:更新三方订单信息表状态为处理中;
+
+if (更新三方订单信息表状态为处理中是否成功？) then (no)
+    stop
+else (yes)
+endif
+
+:根据订单编号获取OSS基础信息、补充信息;
+
+partition 使用浅橙V3接口格式解析 {
+    :解析基础信息获取，获取用户身份证号、手机号;
+
+    if (根据身份证、手机、渠道来源查询基础信息表，是否有这个人？) then (no)
+        stop
+        note left
+        "订单:" + orderNo + "，用户信息不存在"
+        end note
+    else(yes)
+    endif
+
+    partition 保存浅橙用户补充信息 {
+        :解析设备信息;
+        :保存设备信息;
+        :解析通讯录信息;
+        :保存通讯录信息;
+        :解析紧急联系人信息;
+        :保存紧急联系人信息;
+    }
+    partition 补充用户信息 {
+        :提取基础信息，并更新用户基本信息;
+        note left
+        包括教育程度、家庭信息、居住地址、居住详细地址、居住时长、
+        户籍地址、用户认证信息、人脸识别分数
+        end note
+    }
+
+    :更新用户信息表数据;
+
+    partition 订单初始化 {
+            note left
+            产品授信判断标准：cl_product表risk_type,1表示借款,2表示授信
+            是否可借判断标准：
+                1、判断用户是否有在贷非天网计划产品，如果已有在贷订单，不能再借款了
+                2、查询同一个身份证下，产品优先级【小于等于】该产品的最大可贷日期。
+                如果存在最大可贷日期，不可贷
+            end note
+
+            if (用户可借？) then (yes)
+
+                :初始化浅橙借款订单信息;
+
+            else (no)
+            endif
+    }
+    if (用户是否可借？) then (no)
+        stop
+    else (yes)
+    endif
+
+    :生成借款订单;
+}
+
+
+
+:更新三方订单信息表状态为处理完成;
+stop
+@enduml

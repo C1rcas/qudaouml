@@ -1,0 +1,159 @@
+@startuml
+start
+:Rong360PushOrderJob工作;
+note right
+  //cl_borrow 表 // <b>借款信息表</b>
+  ====
+  查询条件
+  //process_status = 2//<b>待解析状态</b>
+  //source = 4 // <b>渠道来源融360</b>
+  //gmt_modified < DATE_SUB(NOW(),INTERVAL 1 MINUTE) // <b>一分钟之前的数据的数据</b>
+end note
+:查询待解析的订单数据;
+partition 能否解析订单 {
+    if (待解析订单数据是否存在？) then (no)
+        stop
+        note left
+          订单不存在，不解析
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表数据是否存在？) then (no)
+        stop
+        note left
+        融360订单状态异常，不解析
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表数据处理状态为带解析？) then (no)
+        stop
+        note left
+        融360订单状态异常，不解析
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表认证信息是否存在？) then (no)
+        stop
+        note left
+        融360订单未认证完成，但状态已经是待处理，
+        需要人工检查
+        end note
+    else (yes)
+    endif
+
+    if (三方订单表认证信息的绑卡、运营商信息是否存在？) then (no)
+        stop
+        note left
+        融360订单:{}未认证完成，但状态已经是待处理
+        ，需要人工检查，绑卡:{}，运营商:{}
+        end note
+    else (yes)
+    endif
+
+    if (绑卡信息是否存在？) then (no)
+        stop
+            note left
+            融360订单:{}，用户userId:{}，未绑卡，
+            需要人工检查
+            end note
+    else (yes)
+    endif
+
+    if (风控开关是否存在？) then (no)
+        stop
+            note left
+            融360订单:{},风控开关未开，不解析大额订单
+            end note
+    else (yes)
+    endif
+
+}
+
+
+:更新三方订单信息表状态为处理中;
+
+if (更新三方订单信息表状态为处理中是否成功？) then (no)
+    stop
+    note left
+    订单解析，三方订单：" + orderNo + "更新订单状态为处理中异常
+    end note
+else (yes)
+endif
+
+:根据订单编号获取OSS基础信息、补充信息;
+
+partition 解析并保存信息 {
+
+    :解析基础信息获取，获取用户身份证号、手机号;
+
+    partition 重新初始化三方订单信息表productId {
+        if (三方新消息表的productId为空或者为0？) then (yes)
+
+            :获取基础信息中的product_id字段;
+
+            if (基础信息中的product_id字段是否为空？) then (no)
+                stop
+                    note left
+                    融360订单解析，订单号:[" + thirdOrderNo + "]，
+                    产品id未提供
+                    end note
+            else (yes)
+
+            :更新三方信息表的productId;
+
+            endif
+        else (no)
+        endif
+    }
+    if (根据身份证、手机、渠道来源查询基础信息表，是否有这个人？) then (no)
+        stop
+            note left
+            融360订单:" + thirdOrderNo + "用户信息不存在
+            end note
+    else (yes)
+    endif
+    partition 更新三方订单信息表用户id {
+        if (三方订单信息表user_id与用户基本信息表user_id不相等么？) then (yes)
+
+            :将用户基本信息表的user_id取出更新到三方订单信息表;
+
+        else (no)
+        endif
+    }
+
+    :保存用户补充信息（设备信息、通讯录信息、紧急联系人信息;
+
+    :更新用户信息(教育程度、家庭住址、工作信息、ocr照片);
+
+    :更新用户信息表数据;
+
+    partition 非授信订单处理 {
+
+        :根据productId查询是否为授信产品;
+
+        :根据thirdOrderNo, userId, productId查询订单是否可借;
+
+        note left
+        产品授信判断标准：cl_product表risk_type,1表示借款,2表示授信
+        是否可借判断标准：
+            1、判断用户是否有在贷非天网计划产品，如果已有在贷订单，不能再借款了
+            2、查询同一个身份证下，产品优先级【小于等于】该产品的最大可贷日期。
+            如果存在最大可贷日期，不可贷
+        end note
+        if (是非授信产品且用户可借？) then (yes)
+
+            :初始化融360借款订单信息;
+
+        else (no)
+        endif
+    }
+}
+
+
+:更新三方订单信息表状态为处理完成;
+
+stop
+@enduml

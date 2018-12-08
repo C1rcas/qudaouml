@@ -1,0 +1,64 @@
+@startuml
+start
+    :北斗平台调用我方绑卡接口;
+    if (third_order_info表data_state=1？) then (no)
+        stop;
+        note left
+        透传提示：信息未补充完成，请30秒后重试
+        end note
+    else (no)
+    endif;
+    :新网认证状态判断;
+    if (已认证) then (yes)
+      :绑卡;
+      note left
+         执行绑卡逻辑
+
+         1、解绑该用户的cl_bank_card表的
+         default_pay、default_repay为0;
+         default_repay表示默认还款卡 0：否 1：是
+         default_pay表示默认放款卡 0：否；1：是
+         设置该用户的cl_bank_card表的default_pay、
+         default_repay为1;
+
+         2、缓存新网绑卡成功后回跳51的页面地址、订单编号
+
+         3、每个订单都必须绑卡成功，已经开过户的，
+         绑卡完成后三方表认证项字段：
+         增加绑卡认证{"bindCard":"true"}大额和pd都需要
+         4、PD订单绑卡，新网必须开户状态，
+         三方表状态(process_status)变为待解析2
+
+      end note
+       if(绑卡是否成功) then(yes)
+       :返回绑卡成功200;
+       stop;
+       else (no)
+       :返回绑卡失败500;
+       stop;
+       endif;
+    else if(未认证) then (yes)
+    :绑卡;
+           if(绑卡是否成功) then(yes)
+           :返回绑卡成功200
+           &新网认证请求地址;
+           stop;
+           else (no)
+           :返回绑卡失败500
+           &新网认证请求地址;
+           stop;
+           endif;
+    else (认证中)
+    :返回绑卡失败500
+    不需要新网认证请求地址;
+        note left
+        透传信息：
+        您有一笔绑卡申请正在处理，
+        请稍后再试
+        end note
+    stop;
+    endif;
+
+
+
+@enduml

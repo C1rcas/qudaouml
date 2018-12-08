@@ -1,0 +1,32 @@
+@startuml
+start;
+:SendUnconfirmedLoanSmsJob运行;
+note right
+  cl_borrow 表 //state = 12//
+  //gmt_modified  为近7天 //
+  的 <b>数据</b>
+end note
+if (待解析订单数据是否存在？) then (no)
+stop
+endif
+:短信类型判断;
+if (第二天没确认？) then (yes)
+  :第二天短信;
+elseif (第三天没确认？) then (yes)
+  :第三天短信;
+elseif (第四天没确认？) then (yes)
+  :第四天短信;
+elseif (第五天没确认？) then (yes)
+  :第五天短信;
+elseif (第六天没确认？) then (yes)
+  :第六天短信;
+elseif (第七天没确认？) then (yes)
+  :第七天短信;
+else (其他情况)
+  : 不发送短信;
+endif
+if (短信类型是否存在？) then (no)
+stop
+endif
+:发送短信;
+@enduml
